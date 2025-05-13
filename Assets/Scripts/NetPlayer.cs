@@ -7,6 +7,7 @@ public class NetPlayer : NetworkBehaviour
 {
     public NetworkVariable<int> score = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
     private float scoreAccumulator = 0f;
+    public GameObject piller;
 
     // Start is called before the first frame update
     void Start()
@@ -32,12 +33,24 @@ public class NetPlayer : NetworkBehaviour
             score.Value += 1;
             scoreAccumulator -= 1.0f;
         }
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            CreateObjectServerRpc();
+        }
+    }
+
+    [ServerRpc]
+    public void CreateObjectServerRpc()
+    {
+        Instantiate(piller);
     }
 
     [ServerRpc]
     void MovingServerRPC(Vector3 position)
     {
         transform.position = position;
+        MovingClientRPC(transform.position);
     }
 
     [ClientRpc]

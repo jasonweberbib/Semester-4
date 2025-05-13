@@ -103,6 +103,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   score:
     m_InternalValue: 0
+  piller: {fileID: 6047176678928353189, guid: 4029d5fc60e28174b9d1f9a04579c305, type: 3}
 --- !u!54 &-369593898324955331
 Rigidbody:
   m_ObjectHideFlags: 0

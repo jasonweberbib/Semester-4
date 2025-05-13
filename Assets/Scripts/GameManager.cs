@@ -5,10 +5,19 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    public bool IsClient = false;
     // Start is called before the first frame update
     void Start()
     {
-        NetworkManager.Singleton.StartHost();
+        if (!IsClient)
+        {
+            NetworkManager.Singleton.StartHost();
+        }
+        else
+        {
+            NetworkManager.Singleton.StartClient();
+        }
+        
     }
 
     // Update is called once per frame

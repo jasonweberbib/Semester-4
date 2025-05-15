@@ -6,27 +6,29 @@ using UnityEngine;
 public class NetPlayer : NetworkBehaviour
 {
     public NetworkVariable<int> score = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    public int pillerscore = 25;
     private float scoreAccumulator = 0f;
     public GameObject piller;
+    public GameObject ball;
 
     // Start is called before the first frame update
     void Start()
     {
-        
+
     }
 
     // Update is called once per frame
     void Update()
     {
-        if(!IsOwner || !IsSpawned) return;
+        if (!IsOwner || !IsSpawned) return;
 
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
-        Vector3 movement = new Vector3 (x,0,z);
+        Vector3 movement = new Vector3(x, 0, z);
         if (movement.magnitude > 0)
         {
             transform.position += movement * Time.deltaTime;
-            MovingServerRPC(movement);
+            MovingServerRPC(transform.position);
         }
         if ((scoreAccumulator += Time.deltaTime) >= 1.0f)
         {
@@ -38,17 +40,26 @@ public class NetPlayer : NetworkBehaviour
         {
             CreateObjectServerRpc();
         }
+
     }
 
+    // [ServerRpc (RequierOwnership = false)]
     [ServerRpc]
     public void CreateObjectServerRpc()
     {
-        Instantiate(piller);
+        if(score.Value >= pillerscore)
+        {
+            GameObject obj = Instantiate(piller);
+            obj.GetComponent<NetworkObject>().Spawn(true);
+            score.Value -= 25;
+        }
+        if(score.Value >= )
     }
 
     [ServerRpc]
     void MovingServerRPC(Vector3 position)
     {
+        // Die Position wird nun direkt übernommen (als absolute Position)
         transform.position = position;
         MovingClientRPC(transform.position);
     }

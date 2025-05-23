@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
+using UnityEditor.Animations;
 using UnityEngine;
 
 public class NetPlayer : NetworkBehaviour
@@ -22,11 +23,17 @@ public class NetPlayer : NetworkBehaviour
     {
         if (!IsOwner || !IsSpawned) return;
 
+        if(score.Value < 0)
+        {
+            score.Value = 0;
+        }
+
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
         Vector3 movement = new Vector3(x, 0, z);
         if (movement.magnitude > 0)
         {
+            
             transform.position += movement * Time.deltaTime;
             MovingServerRPC(transform.position);
         }
@@ -53,7 +60,12 @@ public class NetPlayer : NetworkBehaviour
             obj.GetComponent<NetworkObject>().Spawn(true);
             score.Value -= 25;
         }
-        if(score.Value >= )
+        if(score.Value >= 75)
+        {
+            GameObject obj = Instantiate(ball);
+            obj.GetComponent<NetworkObject>().Spawn(true);
+            score.Value -= 75;
+        }
     }
 
     [ServerRpc]

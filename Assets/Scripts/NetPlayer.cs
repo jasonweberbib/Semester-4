@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
-using UnityEditor.Animations;
 using UnityEngine;
 
 public class NetPlayer : NetworkBehaviour
@@ -9,69 +8,133 @@ public class NetPlayer : NetworkBehaviour
     public NetworkVariable<int> score = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
     public int pillerscore = 25;
     private float scoreAccumulator = 0f;
+
     public GameObject piller;
     public GameObject ball;
-    public Transform playerCamera; // Die Kamera, die am Spieler hängt
+
+    public Transform playerCamera;
+    public GameObject cameraFollowTargetPrefab; // Assign this in Inspector
+    private Transform cameraFollowTarget; // Spawned at runtime
+
     public float moveSpeed = 5f;
-    public float rotationSpeed = 90f; // Grad pro Sekunde
+    public float rotationSpeed = 90f;
+    public float mouseSensitivity = 2f;
 
+    private float mouseX;
+    private float mouseY;
 
-
-    // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
-    // Update is called once per frame
-    void Update()
+    void Start()
     {
-        if (!IsOwner || !IsSpawned) return;
+        if (!IsOwner) return;
 
-        if (score.Value < 0)
+        if (IsOwner)
         {
-            score.Value = 0;
+            // Find and assign camera follow script
+            Camera mainCam = Camera.main;
+            if (mainCam != null)
+            {
+                playerCamera = mainCam.transform;
+
+                CameraFollow followScript = mainCam.GetComponent<CameraFollow>();
+                if (followScript != null)
+                {
+                    followScript.SetTarget(transform); // Or use your camera follow target if needed
+                }
+            }
+            else
+            {
+                Debug.LogError("No MainCamera found in scene.");
+            }
         }
 
+
+        if (playerCamera == null)
+        {
+            Camera cam = Camera.main;
+            if (cam != null)
+                playerCamera = cam.transform;
+            else
+                Debug.LogError("Main Camera not found.");
+        }
+
+        if (cameraFollowTargetPrefab != null)
+        {
+            GameObject camTarget = Instantiate(cameraFollowTargetPrefab);
+            cameraFollowTarget = camTarget.transform;
+
+            // Optional: match player's current yaw
+            mouseX = transform.eulerAngles.y;
+        }
+        else
+        {
+            Debug.LogError("cameraFollowTargetPrefab not assigned.");
+        }
+    }
+
+    void Update()
+    {
+        if (!IsOwner || !IsSpawned || cameraFollowTarget == null || playerCamera == null) return;
+
+        // === MOUSE LOOK (Right-click drag) ===
+        if (Input.GetMouseButton(1))
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+
+            float mouseDeltaX = Input.GetAxis("Mouse X") * mouseSensitivity;
+            float mouseDeltaY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+            mouseX += mouseDeltaX;
+            mouseY -= mouseDeltaY;
+            mouseY = Mathf.Clamp(mouseY, -20f, 60f);
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        // === UPDATE CAMERA POSITION ===
+        cameraFollowTarget.position = transform.position + Vector3.up * 1.5f;
+
+        Vector3 camOffset = Quaternion.Euler(mouseY, mouseX, 0) * new Vector3(0, 2f, -5f);
+        playerCamera.position = cameraFollowTarget.position + camOffset;
+        playerCamera.LookAt(cameraFollowTarget.position);
+
+        // === MOVEMENT INPUT ===
         Vector3 inputDir = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")).normalized;
 
         if (inputDir.magnitude >= 0.1f)
         {
-            // Kamera-Richtung nehmen, aber nur auf Y-Ebene
-            Vector3 camForward = playerCamera.forward;
+            Vector3 camForward = cameraFollowTarget.forward;
+            Vector3 camRight = cameraFollowTarget.right;
             camForward.y = 0;
-            camForward.Normalize();
-
-            Vector3 camRight = playerCamera.right;
             camRight.y = 0;
+            camForward.Normalize();
             camRight.Normalize();
 
-            // Richtung relativ zur Kamera
             Vector3 moveDir = camForward * inputDir.z + camRight * inputDir.x;
             moveDir.Normalize();
 
-            // Position bewegen
             transform.position += moveDir * moveSpeed * Time.deltaTime;
 
-            // Rotation anpassen (zur Bewegungsrichtung drehen)
-            Quaternion targetRotation = Quaternion.LookRotation(moveDir);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            // Rotate player to face movement direction
+            if (Input.GetMouseButton(1))
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(moveDir);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            }
 
-            // Netzwerk sync
             MovingServerRPC(transform.position, transform.rotation);
         }
 
-
-        if ((scoreAccumulator += Time.deltaTime) >= 1.0f)
-        {
-            score.Value += 1;
-            scoreAccumulator -= 1.0f;
-        }
-
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            CreateObjectServerRpc();
-        }
-
+        // === ROTATE WITH Q/E ===
         float rotationInput = 0f;
         if (Input.GetKey(KeyCode.Q)) rotationInput = -1f;
         if (Input.GetKey(KeyCode.E)) rotationInput = 1f;
@@ -83,15 +146,19 @@ public class NetPlayer : NetworkBehaviour
             RotateServerRpc(transform.rotation);
         }
 
-        if (playerCamera != null)
+        // === SCORE ===
+        if ((scoreAccumulator += Time.deltaTime) >= 1.0f)
         {
-            playerCamera.position = transform.position + new Vector3(0.36f, 0.622f, -1.671f); // z.B. Schulterhöhe
-            playerCamera.rotation = Quaternion.Euler(10f, transform.eulerAngles.y, 0); // Leichter Blick nach unten
+            score.Value += 1;
+            scoreAccumulator -= 1.0f;
         }
 
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            CreateObjectServerRpc();
+        }
     }
 
-    // [ServerRpc (RequierOwnership = false)]
     [ServerRpc]
     public void CreateObjectServerRpc()
     {
@@ -138,5 +205,4 @@ public class NetPlayer : NetworkBehaviour
         if (IsOwner) return;
         transform.rotation = newRotation;
     }
-
 }

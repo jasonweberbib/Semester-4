@@ -50,7 +50,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 871249866
+  GlobalObjectIdHash: 1352500200
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -105,6 +105,7 @@ MonoBehaviour:
   score:
     m_InternalValue: 0
   pillerscore: 25
+  ballscore: 75
   piller: {fileID: 6047176678928353189, guid: 4029d5fc60e28174b9d1f9a04579c305, type: 3}
   ball: {fileID: 648059520157164523, guid: 49f513cb3176b7047b959a9746eadda9, type: 3}
   playerCamera: {fileID: 0}
@@ -112,6 +113,7 @@ MonoBehaviour:
   moveSpeed: 5
   rotationSpeed: 90
   mouseSensitivity: 2
+  playerUIPrefab: {fileID: 574316517754903421, guid: aa27aacdb7802fa4ca8082493fd747d2, type: 3}
 --- !u!54 &5339574549883323665
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -171,9 +173,9 @@ CapsuleCollider:
   m_Enabled: 1
   serializedVersion: 2
   m_Radius: 0.5
-  m_Height: 1
+  m_Height: 2.0052316
   m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: -0.020525575, z: 0}
 --- !u!1001 &996833748738788338
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -190,6 +192,10 @@ PrefabInstance:
       propertyPath: playerCamera
       value: 
       objectReference: {fileID: 0}
+    - target: {fileID: -7408829352274555023, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+      propertyPath: cameraFollowTargetPrefab
+      value: 
+      objectReference: {fileID: 624917801924421259, guid: 8aa15754398af754ebe35000a21147ee, type: 3}
     - target: {fileID: -541098904484814684, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -200,7 +206,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 389177307980833323, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3198034891
+      value: 1352500200
       objectReference: {fileID: 0}
     - target: {fileID: 389177307980833323, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: InScenePlacedSourceGlobalObjectIdHash

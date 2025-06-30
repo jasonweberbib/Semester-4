@@ -3,7 +3,12 @@ guid: bbba32a7a58eb7640b395e99805bd51d
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - piller: {fileID: 6047176678928353189, guid: 4029d5fc60e28174b9d1f9a04579c305, type: 3}
+  - ball: {fileID: 648059520157164523, guid: 49f513cb3176b7047b959a9746eadda9, type: 3}
+  - playerCamera: {instanceID: 0}
+  - cameraFollowTargetPrefab: {fileID: 624917801924421259, guid: 8aa15754398af754ebe35000a21147ee, type: 3}
+  - playerUIPrefab: {fileID: 574316517754903421, guid: aa27aacdb7802fa4ca8082493fd747d2, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

@@ -1,29 +1,20 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Netcode;
 using UnityEngine;
+using Unity.Netcode; // Import behalten, auch wenn nicht direkt genutzt
 
 public class GameManager : MonoBehaviour
 {
-    public bool IsClient = false;
-    //private PlayerNet myPlayer;
-    // Start is called before the first frame update
+    // Dieser GameManager ist für die Verwaltung des Spielzustands nach dem Netzwerkstart zuständig.
+    // Die Netzwerk-Startlogik (Host/Client starten) wird vom MainMenuManager gehandhabt.
+
     void Start()
     {
-        if (!IsClient)
-        {
-            NetworkManager.Singleton.StartHost();
-        }
-        else
-        {
-            NetworkManager.Singleton.StartClient();
-        }
-        
+        // Diese Methode bleibt hier leer oder wird für spielspezifische Initialisierungen genutzt,
+        // die NICHT den NetworkManager starten.
+        Debug.Log("GameManager Start Methode wurde aufgerufen.");
     }
 
-    // Update is called once per frame
     void Update()
     {
-        
+        // Diese Methode bleibt hier leer oder wird für fortlaufende Spiel-Logik genutzt.
     }
 }

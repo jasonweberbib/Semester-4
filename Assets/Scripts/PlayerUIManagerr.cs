@@ -1,128 +1,93 @@
 using UnityEngine;
-using TMPro; // Required for TextMeshPro
-using UnityEngine.UI; // Required for UI elements like Button
-using Unity.Netcode; // Required for network interaction
+using TMPro; // Wichtig: Für TextMeshPro
+using Unity.Netcode; // Für NetworkVariable Listener
 
 public class PlayerUIManagerr : MonoBehaviour
 {
-    [Header("UI Elements")]
-    public TextMeshProUGUI scoreText;
-    public Button spawnPillarButton;
-    public Button spawnBallButton;
+    public TextMeshProUGUI scoreText; // Referenz auf dein TextMeshPro-Objekt für den Score
+    public GameObject spawnPillarButton; // Referenz auf deinen Pillar Spawn Button
+    public GameObject spawnBallButton;   // Referenz auf deinen Ball Spawn Button
 
-    // Reference to the NetPlayer script that owns this UI
-    private NetPlayer ownerPlayer;
+    private NetPlayer linkedPlayer; // Referenz auf den NetPlayer, dessen UI das ist
 
-    /// <summary>
-    /// Initializes the UI manager with the owning player's NetPlayer script.
-    /// This should be called immediately after the UI is instantiated.
-    /// </summary>
-    /// <param name="player">The NetPlayer instance that owns this UI.</param>
+    // Diese Methode wird vom NetPlayer aufgerufen, um die UI zu initialisieren
     public void Initialize(NetPlayer player)
     {
-        ownerPlayer = player;
+        linkedPlayer = player;
+        Debug.Log($"PlayerUIManagerr Initialize für Spieler {linkedPlayer.OwnerClientId}: Wird aufgerufen. IsOwner: {linkedPlayer.IsOwner}"); // Hinzufügen
 
-        // Set up button click listeners
-        if (spawnPillarButton != null)
-        {
-            spawnPillarButton.onClick.AddListener(OnSpawnPillarButtonClicked);
-        }
-        if (spawnBallButton != null)
-        {
-            spawnBallButton.onClick.AddListener(OnSpawnBallButtonClicked);
-        }
 
-        // Subscribe to the NetworkVariable's value change event
-        if (ownerPlayer != null)
+        // Sicherstellen, dass das UI Canvas nur für den lokalen Spieler aktiv ist
+        if (linkedPlayer.IsOwner)
         {
-            ownerPlayer.score.OnValueChanged += UpdateScoreUI;
-            // Perform an initial UI update to display the current score immediately
-            UpdateScoreUI(0, ownerPlayer.score.Value); // oldScore is dummy, newScore is actual
+            gameObject.SetActive(true); // Aktiviere das gesamte UI Canvas
+            Debug.Log($"PlayerUIManagerr: UI Canvas für lokalen Spieler aktiviert."); // Hinzufügen
+
+            // Füge Listener für die Buttons hinzu
+            if (spawnPillarButton != null)
+            {
+                spawnPillarButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(OnSpawnPillarButtonClick);
+            }
+            if (spawnBallButton != null)
+            {
+                spawnBallButton.GetComponent<UnityEngine.UI.Button>().onClick.AddListener(OnSpawnBallButtonClick);
+            }
+
+            // Füge einen Listener für die NetworkVariable hinzu, um den Score zu aktualisieren
+            linkedPlayer.score.OnValueChanged += UpdateScoreDisplay;
+            UpdateScoreDisplay(0, linkedPlayer.score.Value); // Initialen Score sofort anzeigen
         }
         else
         {
-            Debug.LogError("PlayerUIManagerr: Owner NetPlayer is null during initialization!");
+            // UI für nicht-lokale Spieler deaktivieren
+            gameObject.SetActive(false);
+            Debug.Log($"PlayerUIManagerr: UI Canvas für NICHT-lokalen Spieler deaktiviert."); // Hinzufügen
         }
     }
 
-    /// <summary>
-    /// Called when the GameObject is destroyed. Used for cleanup to prevent memory leaks.
-    /// </summary>
     void OnDestroy()
     {
-        // Unsubscribe from events to prevent memory leaks if the ownerPlayer still exists
-        if (ownerPlayer != null)
+        // Sicherstellen, dass der Listener entfernt wird, wenn das UI-Objekt zerstört wird
+        if (linkedPlayer != null)
         {
-            ownerPlayer.score.OnValueChanged -= UpdateScoreUI;
+            linkedPlayer.score.OnValueChanged -= UpdateScoreDisplay;
         }
-        // Remove button listeners
+
+        // Button-Listener entfernen, um Memory Leaks zu vermeiden
         if (spawnPillarButton != null)
         {
-            spawnPillarButton.onClick.RemoveListener(OnSpawnPillarButtonClicked);
+            spawnPillarButton.GetComponent<UnityEngine.UI.Button>().onClick.RemoveListener(OnSpawnPillarButtonClick);
         }
         if (spawnBallButton != null)
         {
-            spawnBallButton.onClick.RemoveListener(OnSpawnBallButtonClicked);
+            spawnBallButton.GetComponent<UnityEngine.UI.Button>().onClick.RemoveListener(OnSpawnBallButtonClick);
         }
     }
 
-    /// <summary>
-    /// Updates the score display text. This method is called automatically when 'score' changes.
-    /// </summary>
-    /// <param name="oldScore">The previous score value.</param>
-    /// <param name="newScore">The current score value.</param>
-    private void UpdateScoreUI(int oldScore, int newScore)
+    // Callback-Funktion für den Score-Update
+    private void UpdateScoreDisplay(int oldScore, int newScore)
     {
         if (scoreText != null)
         {
-            scoreText.text = "Score: " + newScore.ToString();
-        }
-        // Optionally, update button interactivity based on score
-        UpdateSpawnButtonStates(newScore);
-    }
-
-    /// <summary>
-    /// Updates the enabled state of the spawn buttons based on the current score.
-    /// </summary>
-    /// <param name="currentScore">The player's current score.</param>
-    private void UpdateSpawnButtonStates(int currentScore)
-    {
-        if (spawnPillarButton != null && ownerPlayer != null)
-        {
-            // Enable pillar button only if score is sufficient
-            spawnPillarButton.interactable = currentScore >= ownerPlayer.pillerscore;
-            // Optionally, update text on button to show cost
-            spawnPillarButton.GetComponentInChildren<TextMeshProUGUI>().text = $"Spawn Pillar ({ownerPlayer.pillerscore})";
-        }
-        if (spawnBallButton != null && ownerPlayer != null)
-        {
-            // Enable ball button only if score is sufficient
-            spawnBallButton.interactable = currentScore >= ownerPlayer.ballscore;
-            // Optionally, update text on button to show cost
-            spawnBallButton.GetComponentInChildren<TextMeshProUGUI>().text = $"Spawn Ball ({ownerPlayer.ballscore})";
+            scoreText.text = "Score: " + newScore;
         }
     }
 
-
-    /// <summary>
-    /// Called when the "Spawn Pillar" button is clicked.
-    /// </summary>
-    private void OnSpawnPillarButtonClicked()
+    // Callback-Funktion für den Pillar Spawn Button
+    private void OnSpawnPillarButtonClick()
     {
-        if (ownerPlayer != null)
+        if (linkedPlayer != null && linkedPlayer.IsOwner)
         {
-            ownerPlayer.SpawnPillarServerRpc(); // Call the specific RPC for spawning a pillar
+            linkedPlayer.SpawnPillarServerRpc();
         }
     }
 
-    /// <summary>
-    /// Called when the "Spawn Ball" button is clicked.
-    /// </summary>
-    private void OnSpawnBallButtonClicked()
+    // Callback-Funktion für den Ball Spawn Button
+    private void OnSpawnBallButtonClick()
     {
-        if (ownerPlayer != null)
+        if (linkedPlayer != null && linkedPlayer.IsOwner)
         {
-            ownerPlayer.SpawnBallServerRpc(); // Call the specific RPC for spawning a ball
+            linkedPlayer.SpawnBallServerRpc();
         }
     }
 }

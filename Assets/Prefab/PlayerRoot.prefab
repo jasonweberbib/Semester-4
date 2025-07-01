@@ -17,7 +17,7 @@ GameObject:
   - component: {fileID: 6384353159354453470}
   m_Layer: 0
   m_Name: PlayerRoot
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -50,7 +50,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 1352500200
+  GlobalObjectIdHash: 871249866
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -108,12 +108,11 @@ MonoBehaviour:
   ballscore: 75
   piller: {fileID: 6047176678928353189, guid: 4029d5fc60e28174b9d1f9a04579c305, type: 3}
   ball: {fileID: 648059520157164523, guid: 49f513cb3176b7047b959a9746eadda9, type: 3}
-  playerCamera: {fileID: 0}
+  playerUIPrefab: {fileID: 574316517754903421, guid: aa27aacdb7802fa4ca8082493fd747d2, type: 3}
   cameraFollowTargetPrefab: {fileID: 624917801924421259, guid: 8aa15754398af754ebe35000a21147ee, type: 3}
   moveSpeed: 5
   rotationSpeed: 90
   mouseSensitivity: 2
-  playerUIPrefab: {fileID: 574316517754903421, guid: aa27aacdb7802fa4ca8082493fd747d2, type: 3}
 --- !u!54 &5339574549883323665
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -198,11 +197,11 @@ PrefabInstance:
       objectReference: {fileID: 624917801924421259, guid: 8aa15754398af754ebe35000a21147ee, type: 3}
     - target: {fileID: -541098904484814684, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 389177307980833323, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 389177307980833323, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
       propertyPath: GlobalObjectIdHash
@@ -260,7 +259,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player1
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 389177307980833323, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: -3710078429300298309, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: -369593898324955331, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: 1441618865287682597, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: -541098904484814684, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: -7408829352274555023, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
+    - {fileID: 3518128742983126967, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
     m_RemovedGameObjects:
     - {fileID: 7446524887912175971, guid: aa963f3dc46293e488a8a0a4ebebd48d, type: 3}
     m_AddedGameObjects: []

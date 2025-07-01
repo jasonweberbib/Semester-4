@@ -118,8 +118,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   scoreText: {fileID: 6647933702378792671}
-  spawnPillarButton: {fileID: 6201294461273025319}
-  spawnBallButton: {fileID: 7431474358499511516}
+  spawnPillarButton: {fileID: 902451853444178966}
+  spawnBallButton: {fileID: 3561639439976800187}
 --- !u!1 &902451853444178966
 GameObject:
   m_ObjectHideFlags: 0

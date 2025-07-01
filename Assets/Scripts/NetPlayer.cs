@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using TMPro; // Für TextMeshPro
 
 public class NetPlayer : NetworkBehaviour
 {
@@ -14,12 +15,15 @@ public class NetPlayer : NetworkBehaviour
     public GameObject piller; // Prefab für den Pillar
     public GameObject ball;   // Prefab für den Ball
 
-    public GameObject playerUIPrefab; // Hier das Canvas Prefab zuweisen
+    [Header("UI Setup")]
+    public GameObject playerUIPrefab; // Hier das HUD Canvas Prefab zuweisen (mit PlayerUIManagerr Script drauf)
     private PlayerUIManagerr currentUI; // Referenz zum instanziierten UI Manager
 
-    public GameObject cameraFollowTargetPrefab; // Hier ein leeres GameObject Prefab zuweisen
+    [Header("Camera Setup")]
+    public GameObject cameraFollowTargetPrefab; // Hier ein leeres GameObject Prefab zuweisen (z.B. _CameraFollowTarget)
     private Transform cameraFollowTarget; // Wird zur Laufzeit gespawnt
 
+    [Header("Movement Settings")]
     public float moveSpeed = 5f;
     public float rotationSpeed = 360f; // Schnellere Rotation für Maus-Steuerung
     public float mouseSensitivity = 2f;
@@ -27,156 +31,201 @@ public class NetPlayer : NetworkBehaviour
     private float mouseX; // Für die horizontale Mausbewegung (Yaw)
     private float mouseY; // Für die vertikale Mausbewegung (Pitch)
 
-    private bool isInGameScene = false; // Flag um zu prüfen ob wir in der Spielszene sind
+    private bool isSetupComplete = false; // Flag, um zu verhindern, dass das Setup mehrfach läuft
 
     void Awake()
     {
-        // Der Cursor-Status wird in Start() und Update() verwaltet.
-        // Keine feste Zuweisung hier, da das Verhalten von der Maussteuerung abhängt.
-        
-        // Prüfe ob wir in der Spielszene sind
-        CheckIfInGameScene();
-    }
-
-    private void CheckIfInGameScene()
-    {
-        string currentScene = SceneManager.GetActiveScene().name;
-        isInGameScene = (currentScene != "MainMenu" && currentScene != "Menu"); // Passe die Menü-Szenennamen an
-        Debug.Log($"NetPlayer: Current scene is {currentScene}, isInGameScene: {isInGameScene}");
+        // Debug.Log("NetPlayer Awake called."); // Hinzugefügt für Debugging
     }
 
     public override void OnNetworkSpawn()
     {
-        base.OnNetworkSpawn();
+        Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}. IsOwner: {IsOwner}. IsHost: {IsHost}. IsServer: {IsServer}."); //
 
-        if (!IsOwner) return; // Nur der Besitzer führt die folgende Logik aus
-
-        // Prüfe erneut die Szene beim Network Spawn
-        CheckIfInGameScene();
-        
-        if (!isInGameScene)
+        if (IsOwner)
         {
-            Debug.Log($"NetPlayer OnNetworkSpawn for Client {OwnerClientId}: Not in game scene, skipping setup.");
-            return;
-        }
+            Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: Dies ist der lokale Spieler."); //
 
-        Debug.Log($"NetPlayer OnNetworkSpawn for Client {OwnerClientId}: Starting setup in game scene.");
-        
-        // Warte etwas länger bevor Setup beginnt, um sicherzustellen dass die Szene vollständig geladen ist
-        StartCoroutine(DelayedSetup());
-    }
-
-    private IEnumerator DelayedSetup()
-    {
-        // Warte mehrere Frames um sicherzustellen dass alles geladen ist
-        yield return new WaitForSeconds(0.5f);
-        
-        // Erneut prüfen ob wir noch in der richtigen Szene sind
-        CheckIfInGameScene();
-        if (!isInGameScene) yield break;
-
-        // --- Kamera-Setup für den lokalen Spieler ---
-        yield return StartCoroutine(SetupCameraAfterDelay());
-
-        // --- UI Instantiation und Initialisierung für den lokalen Spieler ---
-        if (playerUIPrefab != null && isInGameScene)
-        {
-            GameObject playerUIInstance = Instantiate(playerUIPrefab);
-            currentUI = playerUIInstance.GetComponent<PlayerUIManagerr>();
-
-            if (currentUI != null)
+            // WICHTIGE ÄNDERUNG: Registriere einen Listener für den Szenen-Lade-Abschluss
+            // Dies ist der zuverlässigste Weg, um auf das vollständige Laden einer Szene zu warten.
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
             {
-                Debug.Log($"NetPlayer DelayedSetup for Client {OwnerClientId}: UI Manager gefunden. Initialisiere UI.");
-                currentUI.Initialize(this); // Initialisiere den UI Manager mit einer Referenz auf DIESEN NetPlayer
+                NetworkManager.Singleton.SceneManager.OnLoadComplete += OnSceneLoadComplete;
+                Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: OnLoadComplete Listener registriert."); //
             }
             else
             {
-                Debug.LogError($"NetPlayer DelayedSetup for Client {OwnerClientId}: PlayerUIPrefab hat kein PlayerUIManagerr Skript!");
+                Debug.LogError($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: NetworkManager oder SceneManager ist null. Kann OnLoadComplete nicht registrieren."); //
             }
+
+            // Prüfen, ob wir bereits in der Spielszene sind (z.B. wenn der Spieler-Prefab direkt in der Level-Szene platziert ist)
+            string currentSceneName = SceneManager.GetActiveScene().name;
+            if (currentSceneName == "Level" && !isSetupComplete) // Annahme: Deine Spielszene heißt "Level"
+            {
+                Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: Bereits in Spielszene '{currentSceneName}'. Starte Setup sofort."); //
+                StartCoroutine(SetupCameraAndUI());
+            }
+            else
+            {
+                Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: Aktuelle Szene ist '{currentSceneName}'. Warte auf Szenenwechsel zum Setup."); //
+            }
+            
+            // Score Listener für den lokalen Spieler
+            score.OnValueChanged += UpdateScoreLocalDisplay; //
+            UpdateScoreLocalDisplay(0, score.Value); // Initialer Score-Display
         }
         else
         {
-            Debug.LogError($"NetPlayer DelayedSetup for Client {OwnerClientId}: PlayerUIPrefab nicht zugewiesen oder nicht in Spielszene!");
+            Debug.Log($"NetPlayer OnNetworkSpawn für Client {OwnerClientId}: Dies ist ein Remote-Spieler."); //
         }
-
-        // Standardmäßig ist der Cursor ungesperrt und sichtbar für UI-Interaktion
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
     }
 
     public override void OnNetworkDespawn()
     {
-        base.OnNetworkDespawn();
-
-        // Stelle sicher, dass die UI des Spielers nur vom Besitzer zerstört wird,
-        // wenn der Spieler das Netzwerk verlässt oder zerstört wird.
-        if (IsOwner && currentUI != null)
+        if (IsOwner)
         {
-            Destroy(currentUI.gameObject);
+            // WICHTIGE ÄNDERUNG: Deregistriere den Listener beim Despawn
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
+            {
+                NetworkManager.Singleton.SceneManager.OnLoadComplete -= OnSceneLoadComplete;
+                Debug.Log($"NetPlayer OnNetworkDespawn für Client {OwnerClientId}: OnLoadComplete Listener deregistriert."); //
+            }
+
+            score.OnValueChanged -= UpdateScoreLocalDisplay; //
+            Cursor.lockState = CursorLockMode.None; //
+            Cursor.visible = true; //
+            Debug.Log($"NetPlayer OnNetworkDespawn für Client {OwnerClientId}: Cursor freigegeben."); //
+
+            if (currentUI != null)
+            {
+                Destroy(currentUI.gameObject); //
+                Debug.Log($"NetPlayer OnNetworkDespawn für Client {OwnerClientId}: HUD zerstört."); //
+            }
+            if (cameraFollowTarget != null && cameraFollowTarget.gameObject != null)
+            {
+                Destroy(cameraFollowTarget.gameObject); //
+                Debug.Log($"NetPlayer OnNetworkDespawn für Client {OwnerClientId}: CameraFollowTarget zerstört."); //
+            }
         }
+        base.OnNetworkDespawn(); // Basisklassen-Aufruf beibehalten
+    }
 
-        // Zerstöre auch das cameraFollowTarget des Besitzers
-        if (IsOwner && cameraFollowTarget != null)
+    // Callback-Methode für den NetworkManager.SceneManager.OnLoadComplete Event
+    private void OnSceneLoadComplete(ulong clientId, string sceneName, LoadSceneMode loadSceneMode)
+    {
+        // Nur für den Owner und wenn das Setup noch nicht erfolgt ist und es die Spielszene ist
+        if (IsOwner && !isSetupComplete && sceneName == "Level") // Annahme: Deine Spielszene heißt "Level"
         {
-            Destroy(cameraFollowTarget.gameObject);
+            Debug.Log($"NetPlayer OnSceneLoadComplete für Client {OwnerClientId}: Szene '{sceneName}' vollständig geladen. Starte Kamera/UI Setup."); //
+            StartCoroutine(SetupCameraAndUI());
+        }
+        else if (IsOwner)
+        {
+            Debug.Log($"NetPlayer OnSceneLoadComplete für Client {OwnerClientId}: Szene '{sceneName}' geladen, aber entweder nicht die Spielszene oder Setup schon abgeschlossen."); //
         }
     }
 
-    // Coroutine für die Kamera-Einrichtung
-    IEnumerator SetupCameraAfterDelay()
+    private IEnumerator SetupCameraAndUI()
     {
+        if (isSetupComplete) // Verhindere doppeltes Setup
+        {
+            Debug.LogWarning($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Setup bereits abgeschlossen. Breche ab."); //
+            yield break;
+        }
+
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Starte Einrichtungsprozess."); //
+
+        // Setup HUD
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Starte HUD Setup."); //
+        if (playerUIPrefab != null)
+        {
+            GameObject playerUIGameObject = Instantiate(playerUIPrefab); //
+            currentUI = playerUIGameObject.GetComponent<PlayerUIManagerr>(); //
+
+            if (currentUI != null)
+            {
+                currentUI.Initialize(this); // 'this' ist eine Referenz auf diesen NetPlayer
+                Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: UI Manager gefunden. Initialisiere UI."); //
+            }
+            else
+            {
+                Debug.LogError($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: PlayerUIPrefab ({playerUIPrefab.name}) hat kein PlayerUIManagerr Skript!"); //
+            }
+        }
+        else
+        {
+            Debug.LogError($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: PlayerUIPrefab nicht zugewiesen! Bitte im Inspector zuweisen."); //
+        }
+
+        // Setup Camera (verzögert, um sicherzustellen, dass Camera.main verfügbar ist)
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Starte Kamera Setup."); //
         Camera mainCam = null;
         int attempts = 0;
         int maxAttempts = 10;
+        float delayBetweenAttempts = 0.2f; // 200ms
 
-        // Versuche mehrmals die Main Camera zu finden
         while (mainCam == null && attempts < maxAttempts)
         {
             mainCam = Camera.main; // Hier wird die Kamera über den Tag gesucht
             
             if (mainCam == null)
             {
-                Debug.Log($"Attempt {attempts + 1}: Main Camera not found yet, waiting...");
-                yield return new WaitForSeconds(0.2f);
-                attempts++;
+                Debug.LogWarning($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Versuch {attempts + 1}: Main Camera nicht gefunden, warte..."); //
+                yield return new WaitForSeconds(delayBetweenAttempts); //
+                attempts++; //
             }
         }
 
         if (mainCam == null)
         {
-            Debug.LogError("Main Camera could not be found after multiple attempts. Bitte stelle sicher, dass deine Kamera den 'MainCamera' Tag hat und in der Spielszene vorhanden ist.");
-            yield break;
+            Debug.LogError($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Main Camera konnte nach {maxAttempts} Versuchen nicht gefunden werden. Kamera wird nicht eingerichtet."); //
+            isSetupComplete = true; // Markiere Setup als abgeschlossen, auch wenn es fehlschlug, um Endlosschleifen zu vermeiden
+            yield break; // Abbrechen, wenn die Kamera nicht gefunden wurde
         }
 
-        CameraFollow followScript = mainCam.GetComponent<CameraFollow>();
-        if (followScript == null)
-        {
-            Debug.LogError("Main Camera does not have a CameraFollow script attached. Bitte füge es hinzu!");
-            yield break; // Coroutine beenden
-        }
-
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Main Camera gefunden."); //
+        
+        // Instanziiere cameraFollowTarget
         if (cameraFollowTargetPrefab != null)
         {
-            GameObject camTargetObject = Instantiate(cameraFollowTargetPrefab);
-            cameraFollowTarget = camTargetObject.transform;
+            cameraFollowTarget = Instantiate(cameraFollowTargetPrefab).transform; //
             cameraFollowTarget.name = $"PlayerCamTarget_{OwnerClientId}"; // Für besseres Debugging
-
-            followScript.SetTarget(cameraFollowTarget);
-            mouseX = transform.eulerAngles.y;
-            
-            Debug.Log($"Camera setup completed successfully for Client {OwnerClientId}");
+            Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: CameraFollowTarget instanziiert: {cameraFollowTarget.name}"); //
         }
         else
         {
-            Debug.LogError("cameraFollowTargetPrefab not assigned. Bitte weise es im Inspector zu.");
+            Debug.LogError($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: cameraFollowTargetPrefab ist NICHT zugewiesen! Bitte im Inspector zuweisen."); //
+            isSetupComplete = true; // Markiere Setup als abgeschlossen
+            yield break; // Abbrechen, wenn kein Prefab zugewiesen ist
         }
+
+        CameraFollow followScript = mainCam.GetComponent<CameraFollow>(); //
+        if (followScript == null)
+        {
+            Debug.LogError($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Main Camera hat kein CameraFollow Skript! Füge es hinzu."); //
+            followScript = mainCam.gameObject.AddComponent<CameraFollow>(); //
+        }
+
+        followScript.SetTarget(cameraFollowTarget); //
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: CameraFollow Script Target gesetzt zu {cameraFollowTarget.name}."); //
+
+        mouseX = transform.eulerAngles.y; //
+        mouseY = 0f; // Startet ohne vertikale Neigung
+
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Kamera-Setup abgeschlossen."); //
+
+        Cursor.lockState = CursorLockMode.None; //
+        Cursor.visible = true; //
+        Debug.Log($"NetPlayer SetupCameraAndUI für Client {OwnerClientId}: Cursor freigegeben für UI-Interaktion."); //
+        
+        isSetupComplete = true; // Markiere, dass das Setup erfolgreich abgeschlossen wurde
     }
 
     void Update()
     {
         // Nur der Besitzer des Objekts sollte die Steuerung und die Kamera kontrollieren
-        // Und nur wenn wir in der Spielszene sind
-        if (!IsOwner || !IsSpawned || cameraFollowTarget == null || !isInGameScene) return;
+        // Und nur wenn das Setup abgeschlossen ist
+        if (!IsOwner || !IsSpawned || !isSetupComplete || cameraFollowTarget == null) return; //
 
         // === MAUS-BLICK (Kamera-Rotation - nur wenn die rechte Maustaste gedrückt ist) ===
         if (Input.GetMouseButton(1)) // Prüfen, ob die rechte Maustaste gedrückt gehalten wird
@@ -184,12 +233,11 @@ public class NetPlayer : NetworkBehaviour
             Cursor.lockState = CursorLockMode.Locked; // Cursor für Kamerasteuerung sperren
             Cursor.visible = false;                   // Cursor ausblenden
 
-            // Maus-Input holen und auf mouseX/mouseY anwenden
-            float mouseDeltaX = Input.GetAxis("Mouse X") * mouseSensitivity;
-            float mouseDeltaY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+            float mouseDeltaX = Input.GetAxis("Mouse X") * mouseSensitivity; //
+            float mouseDeltaY = Input.GetAxis("Mouse Y") * mouseSensitivity; //
 
-            mouseX += mouseDeltaX;
-            mouseY -= mouseDeltaY;
+            mouseX += mouseDeltaX; //
+            mouseY -= mouseDeltaY; //
             mouseY = Mathf.Clamp(mouseY, -45f, 60f); // Vertikalen Blickwinkel begrenzen (Pitch)
         }
         else // Rechte Maustaste ist NICHT gedrückt
@@ -198,112 +246,114 @@ public class NetPlayer : NetworkBehaviour
             Cursor.visible = true;                  // Cursor anzeigen
         }
 
-        // Aktualisiere die Position des cameraFollowTarget (normalerweise auf Kopfhöhe des Spielers)
-        // Dies ist der Punkt, um den die Kamera kreisen wird.
-        cameraFollowTarget.position = transform.position + Vector3.up * 1.5f;
-
-        // Wende mouseX und mouseY auf die Rotation des cameraFollowTarget an.
-        // Die Rotation dieses Targets wird dann vom CameraFollow-Skript verwendet.
-        cameraFollowTarget.rotation = Quaternion.Euler(mouseY, mouseX, 0);
+        cameraFollowTarget.position = transform.position + Vector3.up * 1.5f; //
+        cameraFollowTarget.rotation = Quaternion.Euler(mouseY, mouseX, 0); //
 
         // === BEWEGUNGSINPUT (Relativ zur Kamera) ===
-        // GetAxisRaw für sofortigen Input ohne Smoothing
-        Vector3 inputDir = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")).normalized;
+        Vector3 inputDir = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")).normalized; //
 
-        // Nur bewegen und rotieren, wenn signifikanter Input vorhanden ist
-        if (inputDir.magnitude >= 0.1f)
+        if (inputDir.magnitude >= 0.1f) //
         {
-            // Die Vorwärts- und Rechts-Vektoren der Kamera holen, Y-Komponente ignorieren für horizontale Bewegung
-            // Dies stellt sicher, dass die Bewegung immer auf der Bodenebene relativ zur horizontalen Ansicht der Kamera erfolgt
-            Vector3 camForward = cameraFollowTarget.forward;
-            Vector3 camRight = cameraFollowTarget.right;
-            camForward.y = 0; // Vektor auf die horizontale Ebene abflachen
-            camRight.y = 0;   // Vektor auf die horizontale Ebene abflachen
-            camForward.Normalize(); // Nach dem Abflachen normalisieren, um die korrekte Geschwindigkeit beizubehalten
-            camRight.Normalize();   // Nach dem Abflachen normalisieren, um die korrekte Geschwindigkeit beizubehalten
+            Vector3 camForward = cameraFollowTarget.forward; //
+            Vector3 camRight = cameraFollowTarget.right; //
+            camForward.y = 0; //
+            camRight.y = 0;   //
+            camForward.Normalize(); //
+            camRight.Normalize();   //
 
-            // Bewegungsrichtung relativ zur Kamera-Ausrichtung berechnen
-            Vector3 moveDir = camForward * inputDir.z + camRight * inputDir.x;
-            moveDir.Normalize(); // Für konsistente Geschwindigkeit in alle Richtungen
+            Vector3 moveDir = camForward * inputDir.z + camRight * inputDir.x; //
+            moveDir.Normalize(); //
 
-            transform.position += moveDir * moveSpeed * Time.deltaTime;
+            transform.position += moveDir * moveSpeed * Time.deltaTime; //
 
-            // Spieler zur horizontalen Richtung der Kamera ausrichten (ihr Vorwärtsvektor)
-            // Der Spieler dreht sich immer dorthin, wohin die Kamera schaut (horizontal)
-            Quaternion targetPlayerRotation = Quaternion.LookRotation(new Vector3(camForward.x, 0, camForward.z));
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPlayerRotation, rotationSpeed * Time.deltaTime);
+            Quaternion targetPlayerRotation = Quaternion.LookRotation(new Vector3(camForward.x, 0, camForward.z)); //
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPlayerRotation, rotationSpeed * Time.deltaTime); //
 
-            MovingServerRPC(transform.position, transform.rotation); // Position und Rotation synchronisieren
+            MovingServerRPC(transform.position, transform.rotation); //
         }
         else
         {
-            // Auch wenn sich der Spieler nicht bewegt, sicherstellen, dass seine Rotation der Yaw-Rotation der Kamera entspricht
-            Vector3 camForward = cameraFollowTarget.forward;
-            Quaternion targetPlayerRotation = Quaternion.LookRotation(new Vector3(camForward.x, 0, camForward.z));
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPlayerRotation, rotationSpeed * Time.deltaTime);
-            // Auch im Ruhezustand synchronisieren, damit die Rotation auf anderen Clients korrekt ist
-            MovingServerRPC(transform.position, transform.rotation);
+            Vector3 camForward = cameraFollowTarget.forward; //
+            Quaternion targetPlayerRotation = Quaternion.LookRotation(new Vector3(camForward.x, 0, camForward.z)); //
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetPlayerRotation, rotationSpeed * Time.deltaTime); //
+            MovingServerRPC(transform.position, transform.rotation); //
         }
 
         // === SCORE-AKKUMULATION ===
-        if ((scoreAccumulator += Time.deltaTime) >= 1.0f)
+        if ((scoreAccumulator += Time.deltaTime) >= 1.0f) //
         {
-            score.Value += 1;
-            scoreAccumulator -= 1.0f;
+            score.Value += 1; //
+            scoreAccumulator -= 1.0f; //
+        }
+    }
+
+    // Entferne CheckIfInGameScene(), da wir jetzt den SceneManager.OnLoadComplete Event verwenden.
+    // private void CheckIfInGameScene() { ... }
+
+    private void UpdateScoreLocalDisplay(int oldScore, int newScore)
+    {
+        if (currentUI != null && currentUI.scoreText != null) //
+        {
+            currentUI.scoreText.text = "Score: " + newScore; //
+        }
+        else
+        {
+            // Debug.LogWarning($"UpdateScoreLocalDisplay: currentUI oder scoreText ist null für Client {OwnerClientId}."); //
         }
     }
 
     // --- RPCs für das Spawnen von Objekten ---
-    // Diese Methoden werden von den UI-Buttons im PlayerUIManagerr aufgerufen.
     [ServerRpc]
     public void SpawnPillarServerRpc()
     {
-        if (score.Value >= pillerscore)
+        if (piller == null) //
         {
-            // Instanziiere den Pillar an der aktuellen Position und Rotation des Spielers
-            GameObject obj = Instantiate(piller, transform.position, transform.rotation);
-            NetworkObject networkObj = obj.GetComponent<NetworkObject>();
+            Debug.LogError("Pillar prefab is not assigned in NetPlayer!"); //
+            return;
+        }
+        if (score.Value >= pillerscore) //
+        {
+            GameObject obj = Instantiate(piller, transform.position + transform.forward * 2f + transform.up, Quaternion.identity); //
+            NetworkObject networkObj = obj.GetComponent<NetworkObject>(); //
             networkObj.Spawn(true); // Spawne das Objekt im Netzwerk
 
-            // Hole die PillarScoreBonus Komponente und setze die spawnerPlayerId
-            PillarScoreBonus pillarBonus = obj.GetComponent<PillarScoreBonus>();
-            if (pillarBonus != null)
+            PillarScoreBonus pillarBonus = obj.GetComponent<PillarScoreBonus>(); //
+            if (pillarBonus != null) //
             {
-                pillarBonus.spawnerPlayerId.Value = OwnerClientId; // Setze die NetworkObjectId des spawnernden Spielers
+                pillarBonus.spawnerPlayerId.Value = OwnerClientId; //
             }
             else
             {
-                Debug.LogWarning("Spawned Pillar does not have a PillarScoreBonus component!");
+                Debug.LogWarning("Spawned Pillar does not have a PillarScoreBonus component! Make sure it's on the Pillar prefab."); //
             }
 
             score.Value -= pillerscore; // Kosten abziehen
         }
         else
         {
-            Debug.LogWarning($"Nicht genug Score, um Pillar zu spawnen. Benötigt: {pillerscore}, Hat: {score.Value}");
+            Debug.LogWarning($"Nicht genug Score, um Pillar zu spawnen. Benötigt: {pillerscore}, Hat: {score.Value}"); //
         }
     }
 
     [ServerRpc]
     public void SpawnBallServerRpc()
     {
-        if (ball == null)
+        if (ball == null) //
         {
-            Debug.LogError("Ball prefab is not assigned in NetPlayer!");
+            Debug.LogError("Ball prefab is not assigned in NetPlayer!"); //
             return;
         }
 
-        if (score.Value >= ballscore)
+        if (score.Value >= ballscore) //
         {
-            // Instanziiere den Ball an der aktuellen Position und Rotation des Spielers
-            GameObject obj = Instantiate(ball, transform.position, transform.rotation);
-            NetworkObject networkObj = obj.GetComponent<NetworkObject>();
+            GameObject obj = Instantiate(ball, transform.position + transform.forward * 2f + transform.up, transform.rotation); //
+            NetworkObject networkObj = obj.GetComponent<NetworkObject>(); //
             networkObj.Spawn(true); // Spawne das Objekt im Netzwerk
             score.Value -= ballscore; // Kosten abziehen
         }
         else
         {
-            Debug.LogWarning($"Nicht genug Score, um Ball zu spawnen. Benötigt: {ballscore}, Hat: {score.Value}");
+            Debug.LogWarning($"Nicht genug Score, um Ball zu spawnen. Benötigt: {ballscore}, Hat: {score.Value}"); //
         }
     }
     // --- Ende RPCs für das Spawnen von Objekten ---
@@ -311,31 +361,34 @@ public class NetPlayer : NetworkBehaviour
     [ServerRpc]
     void MovingServerRPC(Vector3 position, Quaternion rotation)
     {
-        transform.position = position;
-        transform.rotation = rotation;
-        MovingClientRPC(position, rotation);
+        if (!IsOwner) //
+        {
+            transform.position = position; //
+        }
+        transform.rotation = rotation; //
+
+        MovingClientRPC(position, rotation); //
     }
 
     [ClientRpc]
     void MovingClientRPC(Vector3 position, Quaternion rotation)
     {
-        if (IsOwner) return; // Der Besitzer hat sich bereits lokal bewegt, kein Server-Update nötig
-        transform.position = position;
-        transform.rotation = rotation;
+        if (IsOwner) return; //
+        transform.position = position; //
+        transform.rotation = rotation; //
     }
 
-    // RotateServerRpc wird weiterhin verwendet, um die Spielerrotation (ausgelöst durch die Kameraausrichtung) zu synchronisieren
     [ServerRpc]
     void RotateServerRpc(Quaternion newRotation)
     {
-        transform.rotation = newRotation;
-        RotateClientRpc(newRotation);
+        transform.rotation = newRotation; //
+        RotateClientRpc(newRotation); //
     }
 
     [ClientRpc]
     void RotateClientRpc(Quaternion newRotation)
     {
-        if (IsOwner) return;
-        transform.rotation = newRotation;
+        if (IsOwner) return; //
+        transform.rotation = newRotation; //
     }
 }

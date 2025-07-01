@@ -274,6 +274,7 @@ public class NetPlayer : NetworkBehaviour
         MovingServerRPC(transform.position, cameraFollowTarget.rotation);
     }
 
+    // NetPlayer.cs
     private void UpdateScoreLocalDisplay(int oldScore, int newScore)
     {
         if (currentUI != null && currentUI.scoreText != null)
